@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: jira-connector
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    username: OrderInsite
+    password: oi2014.bonafide
+    url: jdbc:postgresql://10.5.32.130:5433/jiraconnector
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        temp:
+          use_jdbc_metadata_defaults: false
+env: tom

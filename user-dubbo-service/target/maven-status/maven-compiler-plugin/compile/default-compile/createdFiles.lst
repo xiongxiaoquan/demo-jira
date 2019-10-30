@@ -1,0 +1,3 @@
+com\jira\user\mapper\UserMapper.class
+com\jira\user\service\UserServiceImpl.class
+com\jira\user\ServiceApplication.class

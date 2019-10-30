@@ -1,0 +1,78 @@
+#!groovy
+pipeline {
+    agent any
+    // 环境变量
+    environment {
+        HARBOR_CREDS = credentials('jenkins-harbor-creds')
+        K8S_CONFIG = credentials('jenkins-k8s-config')
+        MODULE = "api-gateway-zuul"
+        SCRIPTS_PATH = "scripts/zuul-service"
+        GIT_TAG = sh(returnStdout: true,script: 'git describe --tags --always').trim()
+    }
+
+    parameters {
+        string(name: 'HARBOR_HOST', defaultValue: '10.5.32.32:8888', description: 'harbor仓库IP')
+        string(name: 'DOCKER_IMAGE', defaultValue: "jira/zuul-service", description: 'docker镜像名')
+        string(name: 'APP_NAME', defaultValue: 'zuul-service', description: 'k8s中标签名')
+        string(name: 'K8S_NAMESPACE', defaultValue: 'jira', description: 'k8s的namespace名称')
+    }
+
+    // 步骤
+    stages {
+        stage('Maven Build') {
+            when { expression { env.GIT_TAG != null } }
+            agent {
+                docker {
+                    image '10.5.32.32:8888/my/my-maven:3-alpine-ali'
+                    args '-v /mnt/.m2:/root/.m2'
+                }
+            }
+            steps {
+                sh "mvn -U -pl ${MODULE}  -am clean package"
+            }
+        }
+
+        stage('Docker Build') {
+            when {
+                allOf {
+                    expression { env.GIT_TAG != null }
+                }
+            }
+            agent any
+            steps {
+                sh "docker login -u ${HARBOR_CREDS_USR} -p ${HARBOR_CREDS_PSW} ${params.HARBOR_HOST}"
+
+
+                dir("./${MODULE}") {
+                    sh "pwd"
+                    sh "docker build  -t ${params.HARBOR_HOST}/${params.DOCKER_IMAGE}:${GIT_TAG} ."
+                    sh "docker push ${params.HARBOR_HOST}/${params.DOCKER_IMAGE}:${GIT_TAG}"
+                    sh "docker rmi ${params.HARBOR_HOST}/${params.DOCKER_IMAGE}:${GIT_TAG}"
+                }
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                allOf {
+                    expression { env.GIT_TAG != null }
+                }
+            }
+            agent {
+                docker {
+                    image 'lwolf/helm-kubectl-docker'
+                }
+            }
+            steps {
+                sh "mkdir -p ~/.kube"
+                sh "echo ${K8S_CONFIG} | base64 -d > ~/.kube/config"
+
+                dir("./${SCRIPTS_PATH}") {
+                    sh "pwd"
+                    sh "sed -e 's#{IMAGE_URL}#${params.HARBOR_HOST}/${params.DOCKER_IMAGE}#g;s#{IMAGE_TAG}#${GIT_TAG}#g;s#{APP_NAME}#${params.APP_NAME}#g;s#{MODULE}#${MODULE}#g' zuul-service-deployment.tpl > zuul-service-deployment.yml"
+                    sh "kubectl apply -f zuul-service-deployment.yml "
+                }
+            }
+        }
+    }
+}

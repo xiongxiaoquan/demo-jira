@@ -1,0 +1,6 @@
+com\jira\user\redis\RedisClient.class
+com\jira\user\response\Response.class
+com\jira\user\redis\RedisConfig.class
+com\jira\user\controller\UserController.class
+com\jira\user\response\LoginResponse.class
+com\jira\user\ServiceApplication.class
